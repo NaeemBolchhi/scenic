@@ -63,9 +63,9 @@ npm run test:rust                     # unit tests (run on desktop)
 
 ## CI (GitHub Actions)
 
-`.github/workflows/android.yml` builds signed release APKs on every push, PR and manual run: one per ABI (`arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`) plus a `universal` APK. Files appear as artifacts named `scenic-<type>`. Pushing a tag like `v0.1.0` also attaches them to a GitHub release.
+`.github/workflows/build.yml` is one manual job: open the repo's Actions tab, pick **Build**, press **Run workflow**. It never runs on push. When it finishes, download the `android` artifact: a zip holding `Scenic-universal.apk` plus one APK per CPU type (`arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`).
 
-Signing: add repository secrets `ANDROID_KEYSTORE_BASE64` (`base64 -w0 release.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Without them a throwaway key is used, so builds install but cannot update each other. Keep one real keystore for any APK you distribute.
+Signing: with repository secrets `ANDROID_KEYSTORE_B64` (`base64 -w0 release.keystore`), `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`, the APKs are release-signed with your key. Without them the job builds debug-signed APKs, which install fine but are not meant for distribution.
 
 ## Notes
 
