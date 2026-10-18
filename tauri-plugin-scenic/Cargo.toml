@@ -1,0 +1,15 @@
+[package]
+name = "tauri-plugin-scenic"
+version = "0.1.0"
+edition = "2021"
+description = "Android bridge for Scenic: MediaStore saving and WallpaperManager"
+links = "tauri-plugin-scenic"
+publish = false
+
+[dependencies]
+tauri = { version = "2" }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

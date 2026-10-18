@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Normal permission, granted at install. No storage permission is
+         needed: on API 29+ an app can add files to MediaStore freely. -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+</manifest>

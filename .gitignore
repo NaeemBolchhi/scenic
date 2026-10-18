@@ -1,0 +1,6 @@
+node_modules/
+src-tauri/target/
+src-tauri/gen/schemas/
+tauri-plugin-scenic/target/
+tauri-plugin-scenic/android/.tauri/
+tauri-plugin-scenic/android/build/

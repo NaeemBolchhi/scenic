@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Scenic</title>
+  <style>
+    :root {
+      --bg: #101114;
+      --surface: #1b1d22;
+      --text: #eceef2;
+      --muted: #9097a3;
+      --accent: #7cc4a4;
+      --error: #ef8a7d;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    h1 { margin: 0; font-size: 22px; font-weight: 600; }
+    .preview {
+      flex: 1;
+      min-height: 0;
+      border-radius: 16px;
+      background: var(--surface) center / cover no-repeat;
+    }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    button {
+      font: inherit;
+      padding: 14px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--surface);
+      color: var(--text);
+    }
+    button.primary { grid-column: 1 / -1; background: var(--accent); color: #0b1a13; font-weight: 600; }
+    button:disabled { opacity: 0.5; }
+    #status { min-height: 1.45em; margin: 0; color: var(--muted); font-size: 14px; }
+    #status.error { color: var(--error); }
+  </style>
+</head>
+<body>
+  <h1>Scenic</h1>
+  <div class="preview" id="preview"></div>
+
+  <div class="actions">
+    <button class="primary" data-action="download">Save to Photos</button>
+    <button data-action="home">Set home</button>
+    <button data-action="lock">Set lock</button>
+    <button class="primary" data-action="both">Set both</button>
+  </div>
+  <p id="status"></p>
+
+  <script>
+    // ---------------------------------------------------------------
+    // Scenic API. These two functions are the bridge to the Rust side.
+    // Keep this block and change everything else as you like.
+    // ---------------------------------------------------------------
+    const { invoke } = window.__TAURI__.core;
+
+    const Scenic = {
+      /**
+       * Save an image to Pictures/Scenic/ on the device.
+       * @param {string} dataUri  "data:image/...;base64,..." or bare base64
+       * @param {string} [fileName] optional; extension is fixed up automatically
+       * @returns {Promise<{uri, fileName, relativePath, mimeType, bytes}>}
+       */
+      downloadWallpaper(dataUri, fileName) {
+        return invoke('download_wallpaper', { dataUri, fileName: fileName ?? null });
+      },
+
+      /**
+       * Set the wallpaper.
+       * @param {string} dataUri  "data:image/...;base64,..." or bare base64
+       * @param {'home'|'lock'|'both'} [target='both']
+       * @returns {Promise<{target, mimeType, bytes}>}
+       */
+      setWallpaper(dataUri, target = 'both') {
+        return invoke('set_wallpaper', { dataUri, target });
+      },
+
+      /** Helper: turn an image URL (or Blob) into a data URI. */
+      async toDataUri(source) {
+        const blob = source instanceof Blob ? source : await (await fetch(source)).blob();
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
+      },
+    };
+    window.Scenic = Scenic;
+
+    // Errors from Rust arrive as { kind, message }.
+    // kind: invalidImage | invalidArgument | tooLarge | io | android | unsupported | internal
+    function errorText(err) {
+      return typeof err === 'string' ? err : err?.message ?? String(err);
+    }
+
+    // ---------------------------------------------------------------
+    // Placeholder UI. Replace with your own gallery.
+    // ---------------------------------------------------------------
+    const preview = document.getElementById('preview');
+    const status = document.getElementById('status');
+    const buttons = document.querySelectorAll('button[data-action]');
+
+    // A generated sample so the buttons work before you hook up real images.
+    function makeSample() {
+      const c = document.createElement('canvas');
+      c.width = 1080; c.height = 2340;
+      const g = c.getContext('2d');
+      const grad = g.createLinearGradient(0, 0, c.width, c.height);
+      const hue = Math.floor(Math.random() * 360);
+      grad.addColorStop(0, `hsl(${hue} 60% 55%)`);
+      grad.addColorStop(1, `hsl(${(hue + 120) % 360} 55% 20%)`);
+      g.fillStyle = grad;
+      g.fillRect(0, 0, c.width, c.height);
+      return c.toDataURL('image/jpeg', 0.92);
+    }
+
+    let current = makeSample();
+    preview.style.backgroundImage = `url("${current}")`;
+
+    function setStatus(text, isError = false) {
+      status.textContent = text;
+      status.classList.toggle('error', isError);
+    }
+
+    async function run(action) {
+      buttons.forEach(b => (b.disabled = true));
+      setStatus('Working…');
+      try {
+        if (action === 'download') {
+          const r = await Scenic.downloadWallpaper(current);
+          setStatus(`Saved ${r.fileName} to ${r.relativePath}`);
+        } else {
+          const r = await Scenic.setWallpaper(current, action);
+          setStatus(`Wallpaper set (${r.target})`);
+        }
+      } catch (err) {
+        setStatus(errorText(err), true);
+      } finally {
+        buttons.forEach(b => (b.disabled = false));
+      }
+    }
+
+    buttons.forEach(b => b.addEventListener('click', () => run(b.dataset.action)));
+    preview.addEventListener('click', () => {
+      current = makeSample();
+      preview.style.backgroundImage = `url("${current}")`;
+    });
+  </script>
+</body>
+</html>

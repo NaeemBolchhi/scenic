@@ -1,0 +1,4 @@
+// Only used when opening this folder on its own in Android Studio.
+// Inside the app build, tauri-build wires the module in automatically.
+include ':tauri-android'
+project(':tauri-android').projectDir = new File('./.tauri/tauri-api')

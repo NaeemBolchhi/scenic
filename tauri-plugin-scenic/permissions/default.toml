@@ -1,0 +1,5 @@
+"$schema" = "schemas/schema.json"
+
+[default]
+description = "The plugin exposes no frontend commands; the app crate calls it from Rust."
+permissions = []
