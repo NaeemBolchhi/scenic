@@ -1,0 +1,98 @@
+name: Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  android:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - uses: swatinem/rust-cache@v2
+        with: { workspaces: "src-tauri" }
+      - name: System libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev
+      - name: Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+      - run: npm ci
+      - name: Generate Android project and launcher icons
+        run: |
+          if [ ! -d src-tauri/gen/android ]; then
+            npx tauri android init --ci
+          fi
+          npx tauri icon app-icon.png
+      - name: Build (signed release if keystore secrets exist, otherwise debug-signed)
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          APP_NAME=$(node -p "require('./src-tauri/tauri.conf.json').productName.replace(/[^A-Za-z0-9_-]+/g,'')")
+          OUT_ROOT=src-tauri/gen/android/app/build/outputs/apk
+
+          if [ -n "$KEYSTORE_B64" ]; then
+            MODE=release
+            BUILD_FLAGS=""
+            echo "$KEYSTORE_B64" | base64 -d > release.keystore
+            BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)
+          else
+            MODE=debug
+            BUILD_FLAGS="--debug"
+          fi
+
+          # Takes every APK Gradle produced since the marker file was touched, works out which
+          # CPU types it contains (one type = per-ABI APK, several = universal), signs it if
+          # needed and copies it into out/ with a clear name.
+          collect_new() {
+            local apk abis label
+            while IFS= read -r apk; do
+              if [ "$MODE" = release ]; then
+                case "$apk" in *-unsigned.apk) ;; *) continue ;; esac
+              else
+                case "$apk" in */debug/*) ;; *) continue ;; esac
+              fi
+              abis=$(unzip -Z1 "$apk" | grep -oE '^lib/[^/]+/' | sort -u | sed 's#^lib/##; s#/$##')
+              if [ "$(echo "$abis" | wc -l)" -gt 1 ]; then label=universal; else label="$abis"; fi
+              [ -n "$label" ] || { echo "Skipping $apk (no native libs found)"; continue; }
+              echo "Found $apk -> $APP_NAME-$label.apk"
+              if [ "$MODE" = release ]; then
+                "$BT/zipalign" -f -p 4 "$apk" aligned.apk
+                "$BT/apksigner" sign --ks release.keystore --ks-key-alias "$KEY_ALIAS" \
+                  --ks-pass env:KEYSTORE_PASSWORD --out "out/$APP_NAME-$label.apk" aligned.apk
+                rm -f aligned.apk
+              else
+                cp "$apk" "out/$APP_NAME-$label.apk"
+              fi
+            done < <(find "$OUT_ROOT" -name '*.apk' -newer build.marker)
+          }
+
+          # 1) Universal APK: contains all four CPU types, installs on any Android device
+          touch build.marker; sleep 2
+          npx tauri android build --apk $BUILD_FLAGS
+          collect_new
+
+          # 2) One smaller APK per CPU type (arm64-v8a, armeabi-v7a, x86, x86_64)
+          touch build.marker; sleep 2
+          npx tauri android build --apk --split-per-abi $BUILD_FLAGS
+          collect_new
+
+          ls -lh out
+          [ -f "out/$APP_NAME-universal.apk" ] || { echo "Universal APK missing"; find "$OUT_ROOT" -name '*.apk'; exit 1; }
+      # One artifact = one zip download containing every APK
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: out/*.apk
