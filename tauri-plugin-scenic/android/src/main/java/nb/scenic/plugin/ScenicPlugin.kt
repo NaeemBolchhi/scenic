@@ -3,10 +3,12 @@ package nb.scenic.plugin
 import android.app.Activity
 import android.app.WallpaperManager
 import android.content.ContentValues
+import android.graphics.Color
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
+import androidx.core.view.WindowCompat
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
@@ -32,6 +34,12 @@ class SaveToGalleryArgs {
 class SetWallpaperArgs {
     var path: String? = null
     var target: String? = null
+}
+
+@InvokeArg
+class SetSystemBarsArgs {
+    var dark: Boolean? = null
+    var color: String? = null
 }
 
 /**
@@ -130,6 +138,59 @@ class ScenicPlugin(private val activity: Activity) : Plugin(activity) {
             } catch (e: Exception) {
                 Log.e(TAG, "setWallpaper failed", e)
                 invoke.reject(e.message ?: "Could not set the wallpaper", "WALLPAPER_FAILED", e)
+            }
+        }
+    }
+
+    /**
+     * Matches the status and navigation bars to the app's theme, which may
+     * differ from Android's own. [SetSystemBarsArgs.dark] means the APP is
+     * dark, so the bar icons must be light (and the reverse).
+     *
+     * [SetSystemBarsArgs.color] is the optional bar background. Android 15+
+     * draws the app edge-to-edge and ignores it, so the page's own background
+     * shows through instead; older versions use it.
+     */
+    @Command
+    fun setSystemBars(invoke: Invoke) {
+        val args = try {
+            invoke.parseArgs(SetSystemBarsArgs::class.java)
+        } catch (e: Exception) {
+            invoke.reject("Invalid arguments: ${e.message}", "INVALID_ARGS")
+            return
+        }
+
+        val dark = args.dark
+        if (dark == null) {
+            invoke.reject("dark is required", "INVALID_ARGS")
+            return
+        }
+        val color = args.color?.takeIf { it.isNotBlank() }?.let {
+            try {
+                Color.parseColor(it)
+            } catch (_: IllegalArgumentException) {
+                invoke.reject("Unrecognised color \"$it\"; use #RRGGBB", "INVALID_ARGS")
+                return
+            }
+        }
+
+        // Window changes must happen on the UI thread.
+        activity.runOnUiThread {
+            try {
+                val window = activity.window
+                val controller = WindowCompat.getInsetsController(window, window.decorView)
+                controller.isAppearanceLightStatusBars = !dark
+                controller.isAppearanceLightNavigationBars = !dark
+                if (color != null) {
+                    @Suppress("DEPRECATION")
+                    window.statusBarColor = color
+                    @Suppress("DEPRECATION")
+                    window.navigationBarColor = color
+                }
+                invoke.resolve(JSObject())
+            } catch (e: Exception) {
+                Log.e(TAG, "setSystemBars failed", e)
+                invoke.reject(e.message ?: "Could not update the system bars", "SYSTEM_BARS_FAILED", e)
             }
         }
     }

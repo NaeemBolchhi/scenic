@@ -17,6 +17,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::download_wallpaper,
             commands::set_wallpaper,
+            commands::set_system_bars,
             commands::store_image_cache,
             commands::erase_image_cache,
             commands::clear_expired_image_cache,

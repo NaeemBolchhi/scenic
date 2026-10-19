@@ -12,6 +12,32 @@
       --muted: #9097a3;
       --accent: #7cc4a4;
       --error: #ef8a7d;
+      --on-accent: #0b1a13;
+      color-scheme: dark;
+    }
+    /* Light palette: used when Android is in light mode (theme "auto") or
+       when the user forces it. A forced "dark" keeps the defaults above. */
+    @media (prefers-color-scheme: light) {
+      :root:not([data-theme="dark"]) {
+        --bg: #f4f5f7;
+        --surface: #ffffff;
+        --text: #14161a;
+        --muted: #5d6470;
+        --accent: #247a58;
+        --error: #c2392b;
+        --on-accent: #ffffff;
+        color-scheme: light;
+      }
+    }
+    :root[data-theme="light"] {
+        --bg: #f4f5f7;
+        --surface: #ffffff;
+        --text: #14161a;
+        --muted: #5d6470;
+        --accent: #247a58;
+        --error: #c2392b;
+        --on-accent: #ffffff;
+        color-scheme: light;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; }
@@ -24,7 +50,9 @@
       flex-direction: column;
       gap: 16px;
     }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     h1 { margin: 0; font-size: 22px; font-weight: 600; }
+    #theme { padding: 8px 14px; font-size: 14px; color: var(--muted); }
     .preview {
       flex: 1;
       min-height: 0;
@@ -40,14 +68,17 @@
       background: var(--surface);
       color: var(--text);
     }
-    button.primary { grid-column: 1 / -1; background: var(--accent); color: #0b1a13; font-weight: 600; }
+    button.primary { grid-column: 1 / -1; background: var(--accent); color: var(--on-accent); font-weight: 600; }
     button:disabled { opacity: 0.5; }
     #status { min-height: 1.45em; margin: 0; color: var(--muted); font-size: 14px; }
     #status.error { color: var(--error); }
   </style>
 </head>
 <body>
-  <h1>Scenic</h1>
+  <header>
+    <h1>Scenic</h1>
+    <button id="theme" type="button" aria-label="Theme"></button>
+  </header>
   <div class="preview" id="preview"></div>
 
   <div class="actions">
@@ -60,7 +91,7 @@
 
   <script>
     // ---------------------------------------------------------------
-    // Scenic API. These two functions are the bridge to the Rust side.
+    // Scenic API. These functions are the bridge to the Rust side.
     // Keep this block and change everything else as you like.
     // ---------------------------------------------------------------
     const { invoke } = window.__TAURI__.core;
@@ -84,6 +115,19 @@
        */
       setWallpaper(dataUri, target = 'both') {
         return invoke('set_wallpaper', { dataUri, target });
+      },
+
+      /**
+       * Match the Android status and navigation bars to the app's theme,
+       * which may differ from the system theme. Rejects with kind
+       * "unsupported" off Android.
+       * @param {boolean} dark  true if the APP is dark (bar icons turn light)
+       * @param {string} [color]  "#RRGGBB" bar background for Android 14 and
+       *        older; Android 15+ ignores it and shows the page behind the bars
+       * @returns {Promise<void>}
+       */
+      setSystemBars(dark, color) {
+        return invoke('set_system_bars', { dark, color: color || null });
       },
 
       // ---- Image cache -------------------------------------------------
@@ -149,6 +193,49 @@
       },
     };
     window.Scenic = Scenic;
+
+    // ---------------------------------------------------------------
+    // Theme. "auto" follows Android's light/dark setting; "light" and
+    // "dark" override it. Whatever is in effect is pushed to the native
+    // status/navigation bars, so they stay readable even when the app
+    // theme differs from the system theme.
+    // ---------------------------------------------------------------
+    const THEME_KEY = 'scenic-theme';
+    const THEMES = ['auto', 'light', 'dark'];
+    const systemDark = matchMedia('(prefers-color-scheme: dark)');
+    const themeButton = document.getElementById('theme');
+
+    function loadThemeChoice() {
+      try {
+        const saved = localStorage.getItem(THEME_KEY);
+        return THEMES.includes(saved) ? saved : 'auto';
+      } catch { return 'auto'; }
+    }
+
+    let themeChoice = loadThemeChoice();
+
+    function applyTheme() {
+      const root = document.documentElement;
+      if (themeChoice === 'auto') root.removeAttribute('data-theme');
+      else root.dataset.theme = themeChoice;
+
+      const dark = themeChoice === 'auto' ? systemDark.matches : themeChoice === 'dark';
+      themeButton.textContent = themeChoice === 'auto' ? 'Auto' : themeChoice === 'dark' ? 'Dark' : 'Light';
+
+      // Read after the attribute change so it is the colour now on screen.
+      const color = getComputedStyle(root).getPropertyValue('--bg').trim();
+      // Off Android this rejects with "unsupported"; nothing to do then.
+      Scenic.setSystemBars(dark, color).catch(() => {});
+    }
+
+    themeButton.addEventListener('click', () => {
+      themeChoice = THEMES[(THEMES.indexOf(themeChoice) + 1) % THEMES.length];
+      try { localStorage.setItem(THEME_KEY, themeChoice); } catch {}
+      applyTheme();
+    });
+    // Android flipped between light and dark while the app was open.
+    systemDark.addEventListener('change', applyTheme);
+    applyTheme();
 
     // Errors from Rust arrive as { kind, message }.
     // kind: invalidImage | invalidArgument | tooLarge | io | network | android | unsupported | internal

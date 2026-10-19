@@ -34,4 +34,10 @@ impl<R: Runtime> Scenic<R> {
             .run_mobile_plugin("setWallpaper", req)
             .map_err(Into::into)
     }
+
+    pub fn set_system_bars(&self, req: SetSystemBarsRequest) -> crate::Result<SetSystemBarsResponse> {
+        self.0
+            .run_mobile_plugin("setSystemBars", req)
+            .map_err(Into::into)
+    }
 }

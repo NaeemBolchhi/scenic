@@ -4,6 +4,7 @@
 //! const { invoke } = window.__TAURI__.core;
 //! await invoke('download_wallpaper', { dataUri, fileName });   // fileName optional
 //! await invoke('set_wallpaper', { dataUri, target: 'both' });  // 'home' | 'lock' | 'both'
+//! await invoke('set_system_bars', { dark: true, color: '#101114' });  // color optional
 //!
 //! // Image cache ('thumbnail' | 'fullres', plus 'any' where noted):
 //! await invoke('store_image_cache', { imageType, url, days });
@@ -20,7 +21,9 @@ use std::path::PathBuf;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, Runtime};
-use tauri_plugin_scenic::{ScenicExt, SaveToGalleryRequest, SetWallpaperRequest, WallpaperTarget};
+use tauri_plugin_scenic::{
+    ScenicExt, SaveToGalleryRequest, SetSystemBarsRequest, SetWallpaperRequest, WallpaperTarget,
+};
 
 use crate::{
     cache::{self, EntryInfo, Kind, SweepResult},
@@ -109,6 +112,22 @@ pub async fn set_wallpaper<R: Runtime>(
             mime_type: img.format.mime(),
             bytes: img.bytes.len(),
         })
+    })
+    .await?
+}
+
+/// Match the status and navigation bar icons (and, on Android 14 and older,
+/// their background) to the app's theme. `dark` means the app is dark.
+/// Returns an "unsupported" error off Android; the frontend can ignore it.
+#[tauri::command]
+pub async fn set_system_bars<R: Runtime>(
+    app: AppHandle<R>,
+    dark: bool,
+    color: Option<String>,
+) -> Result<()> {
+    tauri::async_runtime::spawn_blocking(move || {
+        app.scenic().set_system_bars(SetSystemBarsRequest { dark, color })?;
+        Ok(())
     })
     .await?
 }

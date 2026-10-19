@@ -60,3 +60,18 @@ pub struct SetWallpaperResponse {
     #[serde(default)]
     pub wallpaper_id: i64,
 }
+
+/// Match the status and navigation bars to the app's theme.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetSystemBarsRequest {
+    /// The app itself is dark, so the bar icons should be light.
+    pub dark: bool,
+    /// Optional "#RRGGBB" background for Android 14 and older; Android 15+
+    /// ignores it and shows the page behind the bars.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SetSystemBarsResponse {}

@@ -1,5 +1,5 @@
 //! Stand-in for non-Android builds, so `tauri dev` on a desktop still runs and
-//! you can work on the frontend. Both calls return `Error::Unsupported`.
+//! you can work on the frontend. All calls return `Error::Unsupported`.
 
 use std::marker::PhantomData;
 
@@ -23,6 +23,10 @@ impl<R: Runtime> Scenic<R> {
     }
 
     pub fn set_wallpaper(&self, _req: SetWallpaperRequest) -> crate::Result<SetWallpaperResponse> {
+        Err(crate::Error::Unsupported)
+    }
+
+    pub fn set_system_bars(&self, _req: SetSystemBarsRequest) -> crate::Result<SetSystemBarsResponse> {
         Err(crate::Error::Unsupported)
     }
 }
