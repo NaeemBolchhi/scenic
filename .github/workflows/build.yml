@@ -41,6 +41,8 @@ jobs:
           set -euo pipefail
           mkdir -p out
           APP_NAME=$(node -p "require('./src-tauri/tauri.conf.json').productName.replace(/[^A-Za-z0-9_-]+/g,'')")
+          # Same version Tauri stamps into the APK (versionName), so file names always match the app
+          APP_VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
           OUT_ROOT=src-tauri/gen/android/app/build/outputs/apk
 
           # Always build in release mode: optimized, stripped and minified. A --debug build
@@ -69,10 +71,10 @@ jobs:
               abis=$(unzip -Z1 "$apk" | grep -oE '^lib/[^/]+/' | sort -u | sed 's#^lib/##; s#/$##')
               if [ "$(echo "$abis" | wc -l)" -gt 1 ]; then label=universal; else label="$abis"; fi
               [ -n "$label" ] || { echo "Skipping $apk (no native libs found)"; continue; }
-              echo "Found $apk -> $APP_NAME-$label.apk"
+              echo "Found $apk -> $APP_NAME-$APP_VERSION-$label.apk"
               "$BT/zipalign" -f -p 4 "$apk" aligned.apk
               "$BT/apksigner" sign --ks release.keystore --ks-key-alias "$KEY_ALIAS" \
-                --ks-pass env:KEYSTORE_PASSWORD --out "out/$APP_NAME-$label.apk" aligned.apk
+                --ks-pass env:KEYSTORE_PASSWORD --out "out/$APP_NAME-$APP_VERSION-$label.apk" aligned.apk
               rm -f aligned.apk
             done < <(find "$OUT_ROOT" -name '*.apk' -newer build.marker)
           }
@@ -88,7 +90,7 @@ jobs:
           collect_new
 
           ls -lh out
-          [ -f "out/$APP_NAME-universal.apk" ] || { echo "Universal APK missing"; find "$OUT_ROOT" -name '*.apk'; exit 1; }
+          [ -f "out/$APP_NAME-$APP_VERSION-universal.apk" ] || { echo "Universal APK missing"; find "$OUT_ROOT" -name '*.apk'; exit 1; }
       # One artifact = one zip download containing every APK
       - uses: actions/upload-artifact@v6
         with:
