@@ -86,6 +86,57 @@
         return invoke('set_wallpaper', { dataUri, target });
       },
 
+      // ---- Image cache -------------------------------------------------
+      // Lives in the app's cache folder, so Android's "Clear cache" wipes it.
+      // imageType: 'thumbnail' | 'fullres' (and 'any' for erase/expire).
+      // Creation time is recorded automatically.
+
+      /**
+       * Download an image and cache it, replacing any older entry for the
+       * same url + type.
+       * @param {'thumbnail'|'fullres'} imageType
+       * @param {string} url   http(s) image URL
+       * @param {number} days  how long to keep it (fractions allowed)
+       * @returns {Promise<{imageType, url, createdAt, expiresAt, bytes, mimeType}>}
+       *          createdAt / expiresAt are Unix milliseconds
+       */
+      storeImageCache(imageType, url, days) {
+        return invoke('store_image_cache', { imageType, url, days });
+      },
+
+      /**
+       * Delete cached images created `olderThanDays` or more days ago
+       * (0 = everything of that type). Other types and newer entries stay.
+       * @param {'thumbnail'|'fullres'|'any'} imageType
+       * @param {number} olderThanDays
+       * @returns {Promise<{removed, freedBytes}>}
+       */
+      eraseImageCache(imageType, olderThanDays) {
+        return invoke('erase_image_cache', { imageType, olderThanDays });
+      },
+
+      /**
+       * Delete cached images whose creation time + lifetime has passed.
+       * @param {'thumbnail'|'fullres'|'any'} [imageType='any']
+       * @returns {Promise<{removed, freedBytes}>}
+       */
+      clearExpiredImageCache(imageType = 'any') {
+        return invoke('clear_expired_image_cache', { imageType });
+      },
+
+      /**
+       * Get an image as a data URI for <img src>. Uses the cache when it has
+       * a live entry; otherwise downloads, caches (for `days`) and returns it.
+       * @param {'thumbnail'|'fullres'} imageType
+       * @param {string} url
+       * @param {number} days  lifetime for a newly written entry
+       * @param {boolean} [forceRefresh=false] ignore the cache and fetch anew
+       * @returns {Promise<string>} "data:image/...;base64,..."
+       */
+      loadImageCache(imageType, url, days, forceRefresh = false) {
+        return invoke('load_image_cache', { imageType, url, days, forceRefresh });
+      },
+
       /** Helper: turn an image URL (or Blob) into a data URI. */
       async toDataUri(source) {
         const blob = source instanceof Blob ? source : await (await fetch(source)).blob();
@@ -100,7 +151,7 @@
     window.Scenic = Scenic;
 
     // Errors from Rust arrive as { kind, message }.
-    // kind: invalidImage | invalidArgument | tooLarge | io | android | unsupported | internal
+    // kind: invalidImage | invalidArgument | tooLarge | io | network | android | unsupported | internal
     function errorText(err) {
       return typeof err === 'string' ? err : err?.message ?? String(err);
     }

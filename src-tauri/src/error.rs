@@ -16,6 +16,9 @@ pub enum Error {
     #[error("could not prepare the image: {0}")]
     Io(#[from] std::io::Error),
 
+    #[error("could not download the image: {0}")]
+    Network(String),
+
     #[error("{0}")]
     Platform(#[from] tauri_plugin_scenic::Error),
 
@@ -30,6 +33,7 @@ impl Error {
             Error::InvalidArgument(_) => "invalidArgument",
             Error::TooLarge { .. } => "tooLarge",
             Error::Io(_) => "io",
+            Error::Network(_) => "network",
             Error::Platform(tauri_plugin_scenic::Error::Unsupported) => "unsupported",
             Error::Platform(_) => "android",
             Error::Internal(_) => "internal",

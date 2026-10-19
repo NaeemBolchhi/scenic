@@ -21,6 +21,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"
 thiserror = "2"
+sha2 = "0.10"
+# Image downloads for the cache. rustls with bundled root certificates: no
+# OpenSSL to cross-compile for Android, and no JNI setup for certificate checks.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 
 [profile.release]
 codegen-units = 1

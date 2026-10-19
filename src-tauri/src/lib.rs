@@ -1,5 +1,7 @@
+mod cache;
 mod commands;
 mod error;
+mod fetch;
 mod image;
 mod temp;
 
@@ -15,6 +17,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::download_wallpaper,
             commands::set_wallpaper,
+            commands::store_image_cache,
+            commands::erase_image_cache,
+            commands::clear_expired_image_cache,
+            commands::load_image_cache,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Scenic");
