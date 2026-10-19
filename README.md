@@ -94,7 +94,7 @@ npm run test:rust                     # unit tests (run on desktop)
 
 `.github/workflows/build.yml` is one manual job: open the repo's Actions tab, pick **Build**, press **Run workflow**. It never runs on push. When it finishes, download the `android` artifact: a zip holding `Scenic-universal.apk` plus one APK per CPU type (`arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`).
 
-Signing: with repository secrets `ANDROID_KEYSTORE_B64` (`base64 -w0 release.keystore`), `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`, the APKs are release-signed with your key. Without them the job builds debug-signed APKs, which install fine but are not meant for distribution.
+Signing: with repository secrets `ANDROID_KEYSTORE_B64` (`base64 -w0 release.keystore`), `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`, the APKs are release-signed with your key. Without them the job still builds optimized release APKs, signed with a throwaway key generated on that run. They install fine, but each build has a different signature, so uninstall the old one before installing a new build. Not meant for distribution.
 
 ## Notes
 
