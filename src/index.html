@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Scenic</title>
 
-    <link rel="stylesheet" type="text/css" href="styles/fontasm.min.css">
     <link rel="stylesheet" type="text/css" href="styles/fontface.min.css">
     <link rel="stylesheet" type="text/css" href="styles/main.min.css">
     <!-- <link rel="stylesheet" type="text/css" href="styles/main.css"> -->
@@ -50,11 +49,11 @@
             </div>
 
             <div data-type="wall-set-save">
-                <div data-type="wall-save" onclick="downloadWallpaper(imgToBase64(document.querySelector('#imgsrc')), 'sample.png')">
+                <div data-type="wall-save" onclick="window.Scenic.downloadWallpaper(imgToBase64(document.querySelector('#imgsrc')), 'sample.png')">
                     <icon data-icon="download"></icon>
                     <span>Save</span>
                 </div>
-                <div data-type="wall-set" onclick="setWallpaper(imgToBase64(document.querySelector('#imgsrc')), 'both')">
+                <div data-type="wall-set" onclick="window.Scenic.setWallpaper(imgToBase64(document.querySelector('#imgsrc')), 'both')">
                     <icon data-icon="image"></icon>
                     <span>Set</span>
                 </div>
