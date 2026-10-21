@@ -49,11 +49,11 @@
             </div>
 
             <div data-type="wall-set-save">
-                <div data-type="wall-save" onclick="window.Scenic.downloadWallpaper(imgToBase64(document.querySelector('#imgsrc')), 'sample.png')">
+                <div data-type="wall-save">
                     <icon data-icon="download"></icon>
                     <span>Save</span>
                 </div>
-                <div data-type="wall-set" onclick="window.Scenic.setWallpaper(imgToBase64(document.querySelector('#imgsrc')), 'both')">
+                <div data-type="wall-set">
                     <icon data-icon="image"></icon>
                     <span>Set</span>
                 </div>
@@ -88,5 +88,212 @@
         </content>
     </div>
     <script type="text/javascript" src="scripts/body.min.js"></script>
+    <script type="text/javascript">
+    (() => {
+        'use strict';
+
+        /* ------------------------------------------------------------------
+         * imgToBase64(src, filter, preview)
+         * Renders an image to a PNG data URI at its native resolution,
+         * applying CSS filter functions rescaled from the preview's size.
+         * ------------------------------------------------------------------ */
+        async function imgToBase64(src, filter = '', preview = null) {
+            if (typeof src !== 'string' || !src.trim()) {
+                throw new Error('imgToBase64: src must be a non-empty string');
+            }
+            src = src.trim();
+
+            // Raw base64 without a "data:" prefix: sniff the type from its magic bytes.
+            if (!/^(data:|blob:|https?:|file:|asset:|\/|\.)/i.test(src)) {
+                const mime =
+                    src.startsWith('iVBOR') ? 'image/png' :
+                    src.startsWith('/9j/')  ? 'image/jpeg' :
+                    src.startsWith('UklGR') ? 'image/webp' :
+                    src.startsWith('R0lGO') ? 'image/gif' : null;
+                if (mime) src = `data:${mime};base64,${src.replace(/\s+/g, '')}`;
+            }
+
+            let css = filter
+                .trim()
+                .replace(/^filter\s*:\s*/i, '')
+                .replace(/\s*!important\s*/i, '')
+                .replace(/;+\s*$/, '')
+                .trim() || 'none';
+
+            // Load the pixels. Fetching the bytes first avoids a tainted canvas.
+            let source, width, height;
+            try {
+                const blob = await (await fetch(src)).blob();
+                source = await createImageBitmap(blob);
+                ({ width, height } = source);
+            } catch {
+                // Fallback (e.g. SVG, or a fetch blocked by CORS): plain <img>.
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.src = src;
+                try {
+                    await img.decode();
+                } catch {
+                    throw new Error('imgToBase64: could not load the image');
+                }
+                source = img;
+                width = img.naturalWidth;
+                height = img.naturalHeight;
+            }
+            if (!width || !height) throw new Error('imgToBase64: image has no dimensions');
+
+            // Rescale preview lengths (px, rem, em) to image pixels.
+            if (preview && css !== 'none') {
+                const isImg = el => el instanceof HTMLImageElement;
+                const paints = el => isImg(el) || /url\(/.test(getComputedStyle(el).backgroundImage);
+                const node = paints(preview)
+                    ? preview
+                    : [...preview.querySelectorAll('*')].find(paints) || preview;
+
+                const cs = getComputedStyle(node);
+                let boxW = parseFloat(cs.width);
+                let boxH = parseFloat(cs.height);
+                if (!(boxW > 0 && boxH > 0)) {
+                    const r = node.getBoundingClientRect();
+                    boxW = r.width;
+                    boxH = r.height;
+                }
+                if (!(boxW > 0 && boxH > 0)) throw new Error('imgToBase64: preview element has no size');
+
+                const sx = boxW / width;
+                const sy = boxH / height;
+                const fit = (isImg(node) ? cs.objectFit : cs.backgroundSize).trim();
+                const shown =
+                    fit === 'cover' ? Math.max(sx, sy) :
+                    fit === 'contain' || fit === 'scale-down' ? Math.min(sx, sy) :
+                    fit === 'auto' || fit === 'auto auto' || fit === 'none' ? 1 :
+                    sx;
+                const k = 1 / shown; // image px per preview px
+
+                const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+                const elPx = parseFloat(cs.fontSize) || rootPx;
+
+                css = css.replace(/(-?\d*\.?\d+)(rem|em|px)(?![a-z%])/gi, (_, n, unit) => {
+                    const px = unit.toLowerCase() === 'px' ? +n
+                             : +n * (unit.toLowerCase() === 'rem' ? rootPx : elPx);
+                    return `${+(px * k).toFixed(2)}px`;
+                });
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('imgToBase64: 2D canvas is unavailable');
+
+            if (css !== 'none') {
+                if (!('filter' in ctx)) throw new Error('imgToBase64: canvas filters are not supported here');
+                ctx.filter = css;
+                if (ctx.filter === 'none') throw new Error(`imgToBase64: invalid CSS filter "${css}"`);
+            }
+
+            ctx.drawImage(source, 0, 0, width, height);
+            source.close?.();
+
+            const out = await new Promise(res => canvas.toBlob(res, 'image/png'));
+            if (!out) throw new Error('imgToBase64: export failed (image may be too large for this device)');
+
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(reader.error);
+                reader.readAsDataURL(out);
+            });
+        }
+        window.imgToBase64 = imgToBase64;
+
+        /* ------------------------------------------------------------------
+         * Reads what the preview shows: the image URL and the CSS filter.
+         * ------------------------------------------------------------------ */
+        const preview = document.querySelector('#imgsrc');
+
+        function readPreview() {
+            const node = [preview, ...preview.querySelectorAll('*')]
+                .find(el => /url\(/.test(getComputedStyle(el).backgroundImage));
+            if (!node) throw new Error('No image in the preview');
+
+            const m = getComputedStyle(node).backgroundImage.match(/url\(\s*(["']?)(.*?)\1\s*\)/);
+            if (!m || !m[2]) throw new Error('Could not read the preview image URL');
+
+            // Filters on the image element first, then on each ancestor up to the
+            // preview wrapper (the browser applies them in that order).
+            const filters = [];
+            for (let el = node; el; el = el.parentElement) {
+                const f = getComputedStyle(el).filter;
+                if (f && f !== 'none') filters.push(f);
+                if (el === preview) break;
+            }
+            return { src: m[2], filter: filters.join(' ') };
+        }
+
+        /* ------------------------------------------------------------------
+         * Small toast for feedback (the page has no visible notification area).
+         * ------------------------------------------------------------------ */
+        let toastEl, toastTimer;
+        function toast(text, isError = false) {
+            if (!toastEl) {
+                toastEl = document.createElement('div');
+                Object.assign(toastEl.style, {
+                    position: 'fixed', left: '50%', zIndex: '99999',
+                    bottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
+                    transform: 'translateX(-50%)', maxWidth: '90vw',
+                    padding: '10px 16px', borderRadius: '12px',
+                    font: '500 14px/1.35 sans-serif', color: '#fff',
+                    textAlign: 'center', pointerEvents: 'none',
+                    wordBreak: 'break-word'
+                });
+                document.body.appendChild(toastEl);
+            }
+            toastEl.style.background = isError ? '#b3261e' : '#222';
+            toastEl.textContent = text;
+            toastEl.style.display = 'block';
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => { toastEl.style.display = 'none'; }, isError ? 6000 : 3000);
+        }
+
+        const errorText = e => typeof e === 'string' ? e : (e && (e.message || e.error)) || JSON.stringify(e);
+
+        /* ------------------------------------------------------------------
+         * Save / Set buttons
+         * ------------------------------------------------------------------ */
+        const invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+        const saveBtn = document.querySelector('[data-type="wall-save"]');
+        const setBtn = document.querySelector('[data-type="wall-set"]');
+        let busy = false;
+
+        async function run(button, task) {
+            if (busy) return;
+            busy = true;
+            button.style.opacity = '0.6';
+            try {
+                if (!invoke) throw new Error('Tauri API is not available');
+                const { src, filter } = readPreview();
+                const dataUri = await imgToBase64(src, filter, preview);
+                toast(await task(dataUri));
+            } catch (e) {
+                console.error(e);
+                toast(errorText(e), true);
+            } finally {
+                button.style.opacity = '';
+                busy = false;
+            }
+        }
+
+        saveBtn.addEventListener('click', () => run(saveBtn, async dataUri => {
+            const r = await invoke('download_wallpaper', { dataUri, fileName: null });
+            return `Saved ${r.fileName} to ${r.relativePath}`;
+        }));
+
+        setBtn.addEventListener('click', () => run(setBtn, async dataUri => {
+            const r = await invoke('set_wallpaper', { dataUri, target: 'both' });
+            return `Wallpaper set (${r.target})`;
+        }));
+    })();
+    </script>
 </body>
 </html>
