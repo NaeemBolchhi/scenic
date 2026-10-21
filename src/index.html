@@ -14,6 +14,10 @@
 
     <script type="text/javascript" src="scripts/head.min.js"></script>
     <script type="text/javascript" src="scripts/theme.min.js"></script>
+
+    <script type="text/javascript" src="lib/gsap.min.js"></script>
+    <script type="text/javascript" src="lib/Flip.min.js"></script>
+    <script type="text/javascript" src="lib/MorphSVGPlugin.min.js"></script>
 </head>
 <body>
     <div id="container">
@@ -21,7 +25,7 @@
             <div data-time=""></div>
         </content>
         <content data-type="wall-preview">
-            <div data-type="wall-preview-image" class="sk">
+            <div id="imgsrc" data-type="wall-preview-image" class="sk">
                 <span style="--_src: url('https://placehold.co/400x400/EEE/181818?text=Wallpaper+Preview')"></span>
             </div>
 
@@ -46,11 +50,11 @@
             </div>
 
             <div data-type="wall-set-save">
-                <div data-type="wall-save">
+                <div data-type="wall-save" onclick="downloadWallpaper(imgToBase64(document.querySelector('#imgsrc')), 'sample.png')">
                     <icon data-icon="download"></icon>
                     <span>Save</span>
                 </div>
-                <div data-type="wall-set">
+                <div data-type="wall-set" onclick="setWallpaper(imgToBase64(document.querySelector('#imgsrc')), 'both')">
                     <icon data-icon="image"></icon>
                     <span>Set</span>
                 </div>
@@ -62,19 +66,20 @@
 
             <div data-type="wall-technical">
                 <div data-type="wall-format">
-                    <icon data-icon="image"></icon>
+                    <icon data-icon="format"></icon>
                     <span>PNG</span>
                 </div>
                 <div data-type="wall-resolution">
-                    <icon data-icon="image"></icon>
-                    <span>1080x1920</span>
+                    <icon data-icon="resolution"></icon>
+                    <span data-type="wall-width">1080</span>
+                    <span data-type="wall-height">1920</span>
                 </div>
                 <div data-type="wall-package">
-                    <icon data-icon="image"></icon>
+                    <icon data-icon="category"></icon>
                     <span>Scenic</span>
                 </div>
                 <div data-type="wall-size">
-                    <icon data-icon="image"></icon>
+                    <icon data-icon="filesize"></icon>
                     <span>2.64 MB</span>
                 </div>
             </div>
